@@ -8,18 +8,42 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from .constants import DEFAULT_BIN_INSTALL_DIR, DEFAULT_GH_EXECUTABLE
 from .diff_baseline import resolve_session_diff_baselines
 from .process_output import communicate_owned_subprocess, terminate_owned_subprocess
 from .runtime_config import BootMode
 
 if TYPE_CHECKING:
     from .repo_config import RepoEntry
+    from .runtime_platform import PlatformPaths
 
-GH_WRAPPER_REAL_PATH = "/usr/bin/gh"
-GH_WRAPPER_INSTALL_PATH = Path("/usr/local/bin/gh")
+# The gh the wrapper delegates to, and the path the wrapper script embeds.
+GH_WRAPPER_REAL_PATH = DEFAULT_GH_EXECUTABLE
+GH_WRAPPER_COMMAND_NAME = "gh"
+CREDENTIAL_SHIM_COMMAND_NAME = "oi-git-credentials"
+GH_WRAPPER_INSTALL_PATH = Path(DEFAULT_BIN_INSTALL_DIR) / GH_WRAPPER_COMMAND_NAME
+CREDENTIAL_SHIM_INSTALL_PATH = Path(DEFAULT_BIN_INSTALL_DIR) / CREDENTIAL_SHIM_COMMAND_NAME
 GH_WRAPPER_BODY = Path(__file__).with_name("gh-wrapper.sh").read_text()
+CREDENTIAL_SHIM_BODY = (
+    '#!/bin/sh\nexec python3 -m sandbox_runtime.credentials.git_credential_helper "$@"\n'
+)
 DEFAULT_GIT_CLONE_TIMEOUT_SECONDS = 300.0
 DEFAULT_GIT_FETCH_TIMEOUT_SECONDS = 120.0
+
+
+def render_gh_wrapper(real_gh_path: str) -> str:
+    """Point the shipped wrapper at `real_gh_path`.
+
+    The script names the Debian location inline so it stays readable and
+    runnable on its own. Anywhere gh lives elsewhere -- Homebrew picks its
+    prefix by architecture -- that one assignment is rewritten.
+    """
+    if real_gh_path == GH_WRAPPER_REAL_PATH:
+        return GH_WRAPPER_BODY
+    assignment = f'REAL_GH="{GH_WRAPPER_REAL_PATH}"'
+    if assignment not in GH_WRAPPER_BODY:
+        raise RuntimeError(f"gh-wrapper.sh no longer assigns {assignment}")
+    return GH_WRAPPER_BODY.replace(assignment, f'REAL_GH="{real_gh_path}"')
 
 
 class RepositorySyncTimeout(TimeoutError):
@@ -78,11 +102,25 @@ class RepositorySynchronizer:
         *,
         clone_timeout_seconds: float = DEFAULT_GIT_CLONE_TIMEOUT_SECONDS,
         fetch_timeout_seconds: float = DEFAULT_GIT_FETCH_TIMEOUT_SECONDS,
+        paths: PlatformPaths | None = None,
     ) -> None:
         self.vcs_host = vcs_host
         self.log = log
         self.clone_timeout_seconds = clone_timeout_seconds
         self.fetch_timeout_seconds = fetch_timeout_seconds
+        self._paths = paths
+
+    @property
+    def _gh_executable(self) -> Path | None:
+        """The real gh to wrap, or None where this platform ships none."""
+        if self._paths is None:
+            return Path(GH_WRAPPER_REAL_PATH)
+        return self._paths.gh_executable
+
+    def _install_path(self, command_name: str, default: Path) -> Path:
+        if self._paths is None:
+            return default
+        return self._paths.bin_install_dir / command_name
 
     def _build_repo_url(self, repo: RepoEntry) -> str:
         return f"https://{self.vcs_host}/{repo.owner}/{repo.name}.git"
@@ -142,10 +180,8 @@ class RepositorySynchronizer:
         return True
 
     async def ensure_credentials_configured(self) -> None:
-        shim_path = Path("/usr/local/bin/oi-git-credentials")
-        shim_body = (
-            '#!/bin/sh\nexec python3 -m sandbox_runtime.credentials.git_credential_helper "$@"\n'
-        )
+        shim_path = self._install_path(CREDENTIAL_SHIM_COMMAND_NAME, CREDENTIAL_SHIM_INSTALL_PATH)
+        shim_body = CREDENTIAL_SHIM_BODY
         shim_available = False
         try:
             if shim_path.exists() and shim_path.read_text() == shim_body:
@@ -182,21 +218,26 @@ class RepositorySynchronizer:
         self._install_gh_wrapper()
 
     def _install_gh_wrapper(self) -> None:
-        real_path = Path(GH_WRAPPER_REAL_PATH)
+        real_path = self._gh_executable
+        if real_path is None:
+            self.log.info("gh_wrapper.skip", reason="gh_not_found")
+            return
         if not os.access(real_path, os.X_OK):
             return
+        install_path = self._install_path(GH_WRAPPER_COMMAND_NAME, GH_WRAPPER_INSTALL_PATH)
+        body = render_gh_wrapper(str(real_path))
         try:
             if (
-                GH_WRAPPER_INSTALL_PATH.exists()
-                and GH_WRAPPER_INSTALL_PATH.read_text() == GH_WRAPPER_BODY
-                and os.access(GH_WRAPPER_INSTALL_PATH, os.X_OK)
+                install_path.exists()
+                and install_path.read_text() == body
+                and os.access(install_path, os.X_OK)
             ):
                 return
-            GH_WRAPPER_INSTALL_PATH.write_text(GH_WRAPPER_BODY)
-            GH_WRAPPER_INSTALL_PATH.chmod(0o755)
+            install_path.write_text(body)
+            install_path.chmod(0o755)
         except OSError as error:
             raise RuntimeError(
-                f"Cannot install authenticated gh wrapper at {GH_WRAPPER_INSTALL_PATH}: {error}"
+                f"Cannot install authenticated gh wrapper at {install_path}: {error}"
             ) from error
 
     async def _ensure_plain_origin(self, repo: RepoEntry) -> bool:

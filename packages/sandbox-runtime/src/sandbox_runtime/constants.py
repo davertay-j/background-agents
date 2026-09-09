@@ -5,6 +5,23 @@
 BIN_INSTALL_DIR_ENV_VAR = "OPENINSPECT_BIN_INSTALL_DIR"
 DEFAULT_BIN_INSTALL_DIR = "/usr/local/bin"
 
+# Cache for short-lived SCM credentials minted by the git credential helper.
+# The Linux image points this at a tmpfs so the tokens never touch a disk that
+# a snapshot could capture.
+SCM_CRED_CACHE_DIR_ENV_VAR = "OI_SCM_CRED_CACHE_DIR"
+DEFAULT_SCM_CRED_CACHE_DIR = "/run/oi"
+
+# Repository checkout root. Every Linux backend mounts a writable volume at
+# this absolute path. Platforms that cannot write to the root of the filesystem
+# resolve their own root; see runtime_platform.
+DEFAULT_WORKSPACE_ROOT = "/workspace"
+WORKSPACE_ROOT_ENV_VAR = "OI_WORKSPACE_ROOT"
+
+# Location of the real gh binary, which the runtime wraps with a credential
+# minting shim installed under BIN_INSTALL_DIR_ENV_VAR. Debian's gh package
+# owns this path; other platforms resolve gh off PATH.
+DEFAULT_GH_EXECUTABLE = "/usr/bin/gh"
+
 # Sandbox lifetime and the env contract used to pass it to the bridge.
 DEFAULT_SANDBOX_TIMEOUT_SECONDS = 7200
 SANDBOX_TIMEOUT_ENV_VAR = "SANDBOX_TIMEOUT_SECONDS"
@@ -34,8 +51,10 @@ NOVNC_PORT_ENV_VAR = "NOVNC_PORT"
 VNC_PASSWORD_ENV_VAR = "VNC_PASSWORD"
 
 # Dotenv file containing `TUNNEL_<port>=<url>` per line, consumed by local
-# services via `--env-file` or direct read.
-TUNNEL_ENV_FILE_PATH = "/workspace/.tunnels.env"
+# services via `--env-file` or direct read. Lives at the workspace root, so the
+# absolute path only holds for platforms using DEFAULT_WORKSPACE_ROOT.
+TUNNEL_ENV_FILE_NAME = ".tunnels.env"
+TUNNEL_ENV_FILE_PATH = f"{DEFAULT_WORKSPACE_ROOT}/{TUNNEL_ENV_FILE_NAME}"
 
 # First line of the tunnel env file: names the sandbox the URLs were resolved
 # for. The manager's write can land before the entrypoint starts (it only

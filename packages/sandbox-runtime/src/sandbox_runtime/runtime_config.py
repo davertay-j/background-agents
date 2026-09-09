@@ -11,6 +11,8 @@ from types import MappingProxyType
 from typing import Any
 from urllib.parse import urlsplit
 
+from .constants import DEFAULT_WORKSPACE_ROOT
+
 
 class BootMode(StrEnum):
     FRESH = "fresh"
@@ -88,6 +90,7 @@ class BridgeProcessConfig:
     control_plane_url: str
     sandbox_token: str
     session_id: str
+    workspace_path: Path
 
 
 @dataclass(frozen=True)
@@ -107,7 +110,7 @@ class RuntimeConfig:
         cls,
         environment: Mapping[str, str],
         *,
-        workspace_path: Path = Path("/workspace"),
+        workspace_path: Path = Path(DEFAULT_WORKSPACE_ROOT),
     ) -> RuntimeConfig:
         repo_owner = environment.get("REPO_OWNER", "")
         repo_name = environment.get("REPO_NAME", "")
@@ -183,6 +186,7 @@ class RuntimeConfig:
             control_plane_url=self.control_plane_url,
             sandbox_token=self.sandbox_token,
             session_id=self.session_id,
+            workspace_path=self.workspace_path,
         )
 
     def managed_skills_config(self) -> ManagedSkillsConfig:

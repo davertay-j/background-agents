@@ -22,7 +22,13 @@ from unittest.mock import MagicMock
 import pytest
 
 from sandbox_runtime import repository_sync
-from sandbox_runtime.repository_sync import GH_WRAPPER_BODY, RepositorySynchronizer
+from sandbox_runtime.repository_sync import (
+    GH_WRAPPER_BODY,
+    GH_WRAPPER_REAL_PATH,
+    RepositorySynchronizer,
+    render_gh_wrapper,
+)
+from sandbox_runtime.runtime_platform import PlatformPaths
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -140,3 +146,68 @@ def test_runtime_fails_when_wrapper_cannot_be_installed(
     synchronizer = RepositorySynchronizer("github.com", MagicMock())
     with pytest.raises(RuntimeError, match="Cannot install authenticated gh wrapper"):
         synchronizer._install_gh_wrapper()
+
+
+def _darwin_paths(tmp_path: Path, gh_executable: Path | None) -> PlatformPaths:
+    return PlatformPaths(
+        workspace_root=tmp_path / "workspace",
+        credential_cache_dir=tmp_path / "cred-cache",
+        bin_install_dir=tmp_path / "bin",
+        gh_executable=gh_executable,
+    )
+
+
+class TestRenderForPlatformsWithoutDebiansGh:
+    """Homebrew picks its prefix by architecture, so gh is not at a fixed path."""
+
+    def test_ships_unchanged_for_the_debian_path(self) -> None:
+        assert render_gh_wrapper(GH_WRAPPER_REAL_PATH) == GH_WRAPPER_BODY
+
+    def test_repoints_only_the_real_gh_assignment(self) -> None:
+        body = render_gh_wrapper("/opt/homebrew/bin/gh")
+
+        assert 'REAL_GH="/opt/homebrew/bin/gh"' in body
+        assert GH_WRAPPER_REAL_PATH not in body
+        assert HELPER_ANCHOR in body
+
+    def test_repointed_wrapper_still_exports_the_minted_token(self, tmp_path: Path) -> None:
+        """The substitution has to leave a working script, not just a changed one."""
+        real_gh = tmp_path / "real-gh"
+        real_gh.write_text(REAL_GH_DECISION)
+        real_gh.chmod(0o755)
+        token_cmd = tmp_path / "token-cmd"
+        token_cmd.write_text(PRINTS_FRESH_TOKEN)
+        token_cmd.chmod(0o755)
+
+        wrapper = tmp_path / "gh"
+        wrapper.write_text(render_gh_wrapper(str(real_gh)).replace(HELPER_ANCHOR, str(token_cmd)))
+        wrapper.chmod(0o755)
+
+        out = _run(wrapper, {"VCS_HOST": "github.com"})
+
+        assert "GH_TOKEN=ghs_fresh" in out
+        assert "ARGS=api user" in out
+
+    def test_installs_into_the_platforms_bin_directory(self, tmp_path: Path) -> None:
+        real_gh = tmp_path / "opt" / "gh"
+        real_gh.parent.mkdir(parents=True)
+        real_gh.touch()
+        real_gh.chmod(0o755)
+        paths = _darwin_paths(tmp_path, real_gh)
+        paths.bin_install_dir.mkdir()
+
+        RepositorySynchronizer("github.com", MagicMock(), paths=paths)._install_gh_wrapper()
+
+        installed = paths.bin_install_dir / "gh"
+        assert f'REAL_GH="{real_gh}"' in installed.read_text()
+        assert os.access(installed, os.X_OK)
+
+    def test_skips_installation_when_the_platform_found_no_gh(self, tmp_path: Path) -> None:
+        paths = _darwin_paths(tmp_path, gh_executable=None)
+        paths.bin_install_dir.mkdir()
+        log = MagicMock()
+
+        RepositorySynchronizer("github.com", log, paths=paths)._install_gh_wrapper()
+
+        assert not (paths.bin_install_dir / "gh").exists()
+        log.info.assert_called_once_with("gh_wrapper.skip", reason="gh_not_found")

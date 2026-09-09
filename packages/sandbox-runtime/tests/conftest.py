@@ -24,7 +24,13 @@ def isolate_runtime_file_paths(tmp_path, monkeypatch):
     tunnel-env file. Tests that care about a specific path still patch it
     themselves; this fixture is the backstop that keeps every other test off
     the real files.
+
+    HOME is pinned for the same reason. On a platform whose paths hang off the
+    home directory rather than off /, a test that composes the production
+    runtime resolves a real workspace and bin directory, and writing to them
+    would litter the developer's home.
     """
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
     manifest_path = str(tmp_path / "oi-repo-manifest.json")
     boot_warnings_path = str(tmp_path / "oi-boot-warnings.jsonl")
     tunnel_env_path = str(tmp_path / ".tunnels.env")

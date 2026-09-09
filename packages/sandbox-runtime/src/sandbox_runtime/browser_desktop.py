@@ -4,7 +4,7 @@ import asyncio
 import contextlib
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 from cryptography.hazmat.decrepit.ciphers.algorithms import TripleDES
 from cryptography.hazmat.primitives.ciphers import Cipher, modes
@@ -29,6 +29,36 @@ _VNC_PASSWORD_FILE_KEY = bytes((0xE8, 0x4A, 0xD6, 0x60, 0xC4, 0x72, 0x1A, 0xE0))
 def _encode_vnc_password(password: bytes) -> bytes:
     encryptor = Cipher(TripleDES(_VNC_PASSWORD_FILE_KEY), modes.ECB()).encryptor()
     return encryptor.update(password.ljust(VNC_PASSWORD_MAX_BYTES, b"\0")) + encryptor.finalize()
+
+
+class BrowserDesktopService(Protocol):
+    """The desktop surface the supervisor drives and restarts."""
+
+    async def start(self) -> None: ...
+
+    async def stop(self) -> None: ...
+
+    def crash(self) -> tuple[str, int] | None: ...
+
+
+class DisabledBrowserDesktop:
+    """Stands in on platforms with no desktop stack to start.
+
+    Reports no crash, which keeps the supervisor's restart loop off it.
+    """
+
+    def __init__(self, log: Any, *, reason: str) -> None:
+        self.log = log
+        self._reason = reason
+
+    async def start(self) -> None:
+        self.log.info("vnc.skip", reason=self._reason)
+
+    async def stop(self) -> None:
+        return None
+
+    def crash(self) -> tuple[str, int] | None:
+        return None
 
 
 class BrowserDesktop:

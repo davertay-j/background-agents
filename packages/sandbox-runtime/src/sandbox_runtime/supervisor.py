@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
     from .agent_bridge_process import AgentBridgeProcess
-    from .browser_desktop import BrowserDesktop
+    from .browser_desktop import BrowserDesktopService
     from .code_server import CodeServer
     from .managed_skills import ManagedSkillsMaterializer
     from .opencode_server import OpenCodeServer
@@ -54,7 +54,7 @@ class SandboxSupervisor:
         agent_bridge: AgentBridgeProcess,
         code_server: CodeServer,
         web_terminal: WebTerminal,
-        browser_desktop: BrowserDesktop,
+        browser_desktop: BrowserDesktopService,
         managed_skills: ManagedSkillsMaterializer | None,
         shutdown_event: asyncio.Event,
         log: Any,

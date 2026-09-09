@@ -17,9 +17,19 @@ class TunnelEnvironment:
     DEFAULT_WAIT_TIMEOUT_SECONDS = 30
     WAIT_POLL_INTERVAL_SECONDS = 0.2
 
-    def __init__(self, sandbox_id: str, log: Any) -> None:
+    def __init__(self, sandbox_id: str, log: Any, *, env_file_path: Path | None = None) -> None:
         self.sandbox_id = sandbox_id
         self.log = log
+        self._env_file_path = env_file_path
+
+    @property
+    def env_file_path(self) -> Path:
+        """Where the manager writes this session's tunnel URLs.
+
+        Defaults to the Linux image's workspace root, which keeps the shared
+        constant the one place that path is written down.
+        """
+        return self._env_file_path or Path(TUNNEL_ENV_FILE_PATH)
 
     def expected_ports(self) -> list[int]:
         raw = os.environ.get(EXPECTED_TUNNEL_PORTS_ENV_VAR, "")
@@ -37,7 +47,7 @@ class TunnelEnvironment:
         return ports
 
     def clear_stale_file(self) -> None:
-        path = Path(TUNNEL_ENV_FILE_PATH)
+        path = self.env_file_path
         if not path.exists() and not path.is_symlink():
             return
         if self.sandbox_id and self.sandbox_id != "unknown":
@@ -65,7 +75,7 @@ class TunnelEnvironment:
         except ValueError:
             timeout_seconds = self.DEFAULT_WAIT_TIMEOUT_SECONDS
 
-        path = Path(TUNNEL_ENV_FILE_PATH)
+        path = self.env_file_path
         expected_prefixes = [f"TUNNEL_{port}=" for port in expected_ports]
         start_time = time.monotonic()
         deadline = start_time + timeout_seconds
