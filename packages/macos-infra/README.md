@@ -56,6 +56,35 @@ The default `PATH` names Homebrew's keg-only `node@22` bin directory explicitly.
 setup hook typically checks for node before doing anything, and a hook that cannot find it fails the
 whole install step.
 
+## Provisioning a host
+
+`scripts/provision-mac-host.sh` prepares a Mac to run sessions. It is idempotent, and it
+deliberately **needs no sudo**: Homebrew's installer creates and chowns a prefix, so it cannot run
+unattended on a host whose service account has no passwordless sudo. Everything installs under the
+user's home instead — Tart as the signed app bundle from its GitHub release (verified against the
+published checksums, and carrying the virtualization entitlements in its signature), and `uv`, which
+then fetches its own interpreter.
+
+```bash
+ssh mac-host 'bash -s' < scripts/provision-mac-host.sh
+```
+
+Two things it does that are easy to get wrong by hand. It installs `tart` as a **shim** that exports
+`TART_HOME`, because otherwise a non-interactive `ssh host tart list` resolves a different VM store
+than an interactive shell. And it puts the bin directory on `PATH` via `.zshenv` rather than
+`.zshrc`, because `.zshrc` is not read by the non-interactive shells that this service and remote
+commands get.
+
+Do not assume a stock macOS host has `git` or `python3`. Both are Command Line Tools shims, and
+without those tools installed they print an install notice to stderr and nothing to stdout — so a
+script calling them fails _silently_ rather than loudly. Neither is needed here: cloning happens
+inside the guest, and this service runs under the interpreter `uv` installed.
+
+`scripts/capacity-checks.sh` verifies the VM behaviour the design depends on, on the host that will
+actually run sessions: that clones boot concurrently with independent networking, that a third is
+refused at Apple's two-VM ceiling, and that suspending one releases a slot. It only ever touches VMs
+named `cap-*`, and removes them on exit.
+
 ## API
 
 Every route below requires `X-OI-Host-Agent-Key`. Unauthenticated requests are rejected before any
