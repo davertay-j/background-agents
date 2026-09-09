@@ -80,10 +80,17 @@ class LocalProcessDriver:
         directory = self._directory(handle.driver_id)
         if not directory.is_dir():
             raise DriverError(f"No sandbox directory for {handle.driver_id}")
+        # An exec should see what the sandbox sees: its own home rather than the
+        # operator's, and its own bin directory ahead of the host's.
         process = await asyncio.create_subprocess_exec(
             *argv,
             cwd=directory,
-            env={"PATH": self._sandbox_path, **(environment or {})},
+            env={
+                "HOME": str(directory / "home"),
+                "TMPDIR": str(directory / "tmp"),
+                "PATH": f"{directory / 'bin'}:{self._sandbox_path}",
+                **(environment or {}),
+            },
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             start_new_session=True,
@@ -126,7 +133,9 @@ class LocalProcessDriver:
         directory = self._directory(handle.driver_id)
         workspace = directory / "workspace"
         bin_dir = directory / "bin"
-        for path in (workspace, bin_dir, directory / "config"):
+        home = directory / "home"
+        tmp = directory / "tmp"
+        for path in (workspace, bin_dir, home, tmp, directory / "config"):
             await asyncio.to_thread(path.mkdir, 0o700, True, True)
 
         log_path = directory / "runtime.log"
@@ -137,7 +146,9 @@ class LocalProcessDriver:
                 "-m",
                 RUNTIME_MODULE,
                 cwd=directory,
-                env=self._environment(spec, workspace=workspace, bin_dir=bin_dir),
+                env=self._environment(
+                    spec, workspace=workspace, bin_dir=bin_dir, home=home, tmp=tmp
+                ),
                 stdin=asyncio.subprocess.DEVNULL,
                 stdout=log,
                 stderr=asyncio.subprocess.STDOUT,
@@ -151,16 +162,27 @@ class LocalProcessDriver:
             log.close()
         self._processes[handle.driver_id] = process
 
-    def _environment(self, spec: SandboxSpec, *, workspace: Path, bin_dir: Path) -> dict[str, str]:
+    def _environment(
+        self, spec: SandboxSpec, *, workspace: Path, bin_dir: Path, home: Path, tmp: Path
+    ) -> dict[str, str]:
         """The sandbox's environment: the control plane's, plus what only the host knows.
 
         The runtime resolves its own platform defaults, but it never creates
         directories -- an image or a launcher owns the layout. This driver is
         the launcher, so it names the locations it just made.
+
+        `HOME` is one of those locations, and it must not be inherited. The
+        runtime writes into the home directory it is given -- a git credential
+        helper, agent configuration, tool caches -- and this driver shares a
+        user account with whoever operates the host. Inheriting `HOME` therefore
+        lets a sandbox rewrite the operator's own dotfiles, and it does: an
+        earlier run of the runtime under a real `HOME` left a credential helper
+        in a developer's global git config pointing into a scratch directory
+        that no longer existed, which breaks every later authenticated fetch.
         """
         environment = {
-            "HOME": os.environ.get("HOME", str(workspace)),
-            "TMPDIR": os.environ.get("TMPDIR", "/tmp"),
+            "HOME": str(home),
+            "TMPDIR": str(tmp),
             # Ahead of every other entry, so the runtime's authenticated `gh`
             # wrapper shadows the real one the way it does in the Linux image.
             "PATH": f"{bin_dir}:{self._sandbox_path}",

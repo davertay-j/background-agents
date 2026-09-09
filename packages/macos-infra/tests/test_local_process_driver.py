@@ -144,6 +144,45 @@ class TestLaunchEnvironment:
         finally:
             await driver.delete(handle)
 
+    async def test_gives_the_sandbox_its_own_home_rather_than_the_operators(
+        self, driver: LocalProcessDriver, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The runtime writes into whatever home it is handed -- a git
+        credential helper, agent config, tool caches -- and this driver shares a
+        user account with whoever operates the host. An inherited HOME lets a
+        sandbox rewrite the operator's dotfiles."""
+        monkeypatch.setenv("HOME", "/Users/operator")
+        monkeypatch.setenv("TMPDIR", "/operator/tmp")
+        handle = await driver.create(spec())
+        try:
+            directory = driver._directory("sandbox-1")
+            environment = await wait_for(directory / "env.txt")
+
+            assert f"HOME={directory / 'home'}" in environment
+            assert f"TMPDIR={directory / 'tmp'}" in environment
+            assert "HOME=/Users/operator" not in environment
+            assert "/operator/tmp" not in environment
+            assert (directory / "home").is_dir()
+            assert (directory / "tmp").is_dir()
+        finally:
+            await driver.delete(handle)
+
+    async def test_a_sandbox_home_does_not_survive_a_replacement(
+        self, driver: LocalProcessDriver
+    ) -> None:
+        """`create` for a reused id starts from nothing, which has to include
+        the home directory and not only the workspace."""
+        handle = await driver.create(spec())
+        home = driver._directory("sandbox-1") / "home"
+        (home / ".gitconfig").write_text("[credential]\n\thelper = stale\n")
+        await driver.suspend(handle)
+
+        handle = await driver.create(spec())
+        try:
+            assert not (home / ".gitconfig").exists()
+        finally:
+            await driver.delete(handle)
+
     async def test_puts_the_sandbox_bin_directory_first_on_path(
         self, driver: LocalProcessDriver
     ) -> None:
