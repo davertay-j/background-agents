@@ -33,6 +33,7 @@ from .attachment_processor import (
 from .constants import (
     BOOT_WARNINGS_FILE_PATH,
     DEFAULT_SANDBOX_TIMEOUT_SECONDS,
+    DEFAULT_WORKSPACE_ROOT,
     MAX_SNAPSHOT_RESERVE_SECONDS,
     REPO_MANIFEST_FILE_PATH,
     SANDBOX_TIMEOUT_ENV_VAR,
@@ -114,6 +115,7 @@ class AgentBridge:
         auth_token: str,
         opencode_port: int = 4096,
         opencode_client: OpenCodeClient | None = None,
+        workspace_path: Path | None = None,
     ):
         self.sandbox_id = sandbox_id
         self.session_id = session_id
@@ -167,7 +169,7 @@ class AgentBridge:
         # Session state
         self.opencode_session_id: str | None = None
         self.session_id_file = Path(tempfile.gettempdir()) / "opencode-session-id"
-        self.repo_path = Path("/workspace")
+        self.repo_path = workspace_path or Path(DEFAULT_WORKSPACE_ROOT)
         # Supervisor-written canonical repo manifest; push targeting resolves
         # member checkout paths through it rather than joining spec-supplied
         # names into the filesystem.
@@ -907,6 +909,12 @@ async def main() -> None:
     parser.add_argument("--control-plane", required=True, help="Control plane URL")
     parser.add_argument("--token", required=True, help="Auth token")
     parser.add_argument("--opencode-port", type=int, default=4096, help="OpenCode port")
+    parser.add_argument(
+        "--workspace",
+        type=Path,
+        default=Path(DEFAULT_WORKSPACE_ROOT),
+        help="Repository checkout root",
+    )
 
     args = parser.parse_args()
 
@@ -916,6 +924,7 @@ async def main() -> None:
         control_plane_url=args.control_plane,
         auth_token=args.token,
         opencode_port=args.opencode_port,
+        workspace_path=args.workspace,
     )
 
     await bridge.run()

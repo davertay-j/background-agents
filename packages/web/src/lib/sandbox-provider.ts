@@ -3,7 +3,7 @@
  */
 
 /** Every backend the web app knows how to render. */
-const SANDBOX_PROVIDERS = ["modal", "daytona", "vercel", "opencomputer", "e2b"] as const;
+const SANDBOX_PROVIDERS = ["modal", "daytona", "vercel", "opencomputer", "e2b", "macos"] as const;
 
 export type PublicSandboxProvider = (typeof SANDBOX_PROVIDERS)[number];
 

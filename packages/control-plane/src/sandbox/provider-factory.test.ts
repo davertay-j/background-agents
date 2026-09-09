@@ -59,6 +59,50 @@ describe("createSandboxProviderFromEnv", () => {
     );
   });
 
+  describe("macOS host agent configuration", () => {
+    const completeEnv = {
+      MACOS_HOST_AGENT_URL: "https://mac-mini-5.example",
+      MACOS_HOST_AGENT_API_KEY: "host-agent-key",
+    };
+
+    it("names both required variables when neither is set", () => {
+      expect(() => createSandboxProviderFromEnv(createEnv({}), "macos")).toThrow(
+        "MACOS_HOST_AGENT_URL and MACOS_HOST_AGENT_API_KEY are required when SANDBOX_PROVIDER=macos"
+      );
+    });
+
+    it.each(["MACOS_HOST_AGENT_URL", "MACOS_HOST_AGENT_API_KEY"] as const)(
+      "fails fast when %s is missing",
+      (missing) => {
+        const env = createEnv({ ...completeEnv, [missing]: undefined });
+
+        expect(() => createSandboxProviderFromEnv(env, "macos")).toThrow(
+          "required when SANDBOX_PROVIDER=macos"
+        );
+      }
+    );
+
+    it("rejects a malformed sandbox lifetime", () => {
+      const env = createEnv({ ...completeEnv, MACOS_SANDBOX_TIMEOUT_SECONDS: "two hours" });
+
+      expect(() => createSandboxProviderFromEnv(env, "macos")).toThrow(
+        "MACOS_SANDBOX_TIMEOUT_SECONDS must be a valid number"
+      );
+    });
+
+    it("builds the provider from a complete environment", () => {
+      const provider = createSandboxProviderFromEnv(createEnv(completeEnv), "macos");
+
+      expect(provider.name).toBe("macos");
+    });
+
+    it("is what SANDBOX_PROVIDER=macos selects", () => {
+      const env = createEnv({ ...completeEnv, SANDBOX_PROVIDER: "macos" });
+
+      expect(createSandboxProviderFromEnv(env).name).toBe("macos");
+    });
+  });
+
   it("requires an OpenComputer template for starts but not existing-session cleanup", () => {
     const env = createEnv({
       OPENCOMPUTER_API_URL: "https://opencomputer.test",

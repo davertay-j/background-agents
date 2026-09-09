@@ -12,8 +12,9 @@ Protocol summary (action = "get"):
     Input on stdin:  key=value lines terminated by an empty line
     Output on stdout: request context lines plus username=… and password=…
 
-Caching: a successful response is persisted to `/run/oi/scm-creds.json` (mode
-0600). Subsequent invocations return the cached credentials until they're
+Caching: a successful response is persisted to `scm-creds.json` (mode 0600) in
+the cache directory the entrypoint exports as OI_SCM_CRED_CACHE_DIR — a tmpfs
+on Linux. Subsequent invocations return the cached credentials until they're
 within `CACHE_REFRESH_BUFFER_SECONDS` of expiry. Concurrent invocations are
 serialised with an advisory lock on a sibling file so two git commands racing
 on first boot don't both call out to the control plane.
@@ -36,10 +37,12 @@ from typing import IO, TYPE_CHECKING, cast
 
 import httpx
 
+from ..constants import DEFAULT_SCM_CRED_CACHE_DIR, SCM_CRED_CACHE_DIR_ENV_VAR
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-CACHE_DIR = Path(os.environ.get("OI_SCM_CRED_CACHE_DIR", "/run/oi"))
+CACHE_DIR = Path(os.environ.get(SCM_CRED_CACHE_DIR_ENV_VAR, DEFAULT_SCM_CRED_CACHE_DIR))
 CACHE_FILE = CACHE_DIR / "scm-creds.json"
 LOCK_FILE = CACHE_DIR / "scm-creds.lock"
 CACHE_REFRESH_BUFFER_SECONDS = 5 * 60

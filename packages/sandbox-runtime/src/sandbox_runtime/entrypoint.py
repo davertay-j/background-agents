@@ -10,7 +10,6 @@ import signal
 
 from .agent_bridge_process import AgentBridgeProcess
 from .boot_warnings import BootWarningSink
-from .browser_desktop import BrowserDesktop
 from .code_server import CodeServer
 from .constants import VNC_DISPLAY, VNC_PASSWORD_ENV_VAR
 from .image_environment import apply_image_environment
@@ -22,6 +21,7 @@ from .repository_boot import RepositoryBoot
 from .repository_hooks import RepositoryHooks
 from .repository_sync import RepositorySynchronizer
 from .runtime_config import RuntimeConfig
+from .runtime_platform import RuntimePlatform, detect_runtime_platform
 from .supervisor import SandboxSupervisor
 from .tunnel_environment import TunnelEnvironment
 from .web_terminal import WebTerminal
@@ -29,10 +29,15 @@ from .web_terminal import WebTerminal
 configure_logging()
 
 
-def build_supervisor(shutdown_event: asyncio.Event) -> SandboxSupervisor:
+def build_supervisor(
+    shutdown_event: asyncio.Event, host: RuntimePlatform | None = None
+) -> SandboxSupervisor:
     """Consume process secrets and compose the production runtime."""
     apply_image_environment()
-    config = RuntimeConfig.from_env(os.environ)
+    # Resolved after the baked environment, so a location the image or the
+    # launcher chose still wins over the platform's default.
+    host = host or detect_runtime_platform()
+    config = RuntimeConfig.from_env(os.environ, workspace_path=host.paths.workspace_root)
     vnc_password = os.environ.pop(VNC_PASSWORD_ENV_VAR, None) or None
     if vnc_password:
         os.environ["DISPLAY"] = VNC_DISPLAY
@@ -42,14 +47,15 @@ def build_supervisor(shutdown_event: asyncio.Event) -> SandboxSupervisor:
         sandbox_id=config.sandbox_id,
         session_id=str(config.session_config.get("session_id", "")),
     )
+    log.info("platform.detected", platform=host.name, workspace=str(host.paths.workspace_root))
     warnings = BootWarningSink(log)
     repository_boot = RepositoryBoot(
         config.repository_config(),
         log,
         warnings,
-        TunnelEnvironment(config.sandbox_id, log),
+        TunnelEnvironment(config.sandbox_id, log, env_file_path=host.paths.tunnel_env_file),
         RepositoryHooks(log),
-        RepositorySynchronizer(config.vcs_host, log),
+        RepositorySynchronizer(config.vcs_host, log, paths=host.paths),
     )
     managed_skills_config = config.managed_skills_config()
     managed_skills = None
@@ -69,11 +75,12 @@ def build_supervisor(shutdown_event: asyncio.Event) -> SandboxSupervisor:
         shutdown_event,
         log,
         warnings.record,
+        paths=host.paths,
     )
     agent_bridge = AgentBridgeProcess(config.bridge_process_config(), log)
     code_server = CodeServer(log)
     web_terminal = WebTerminal(log)
-    browser_desktop = BrowserDesktop(log, password=vnc_password)
+    browser_desktop = host.create_browser_desktop(log, password=vnc_password)
     return SandboxSupervisor(
         config,
         repository_boot,

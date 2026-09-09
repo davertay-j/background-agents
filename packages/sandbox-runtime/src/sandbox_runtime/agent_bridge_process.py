@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import os
+import sys
 from typing import TYPE_CHECKING, Any
 
 from .constants import OPENCODE_PORT
@@ -21,6 +22,7 @@ class AgentBridgeProcess:
         self.control_plane_url = config.control_plane_url
         self.sandbox_token = config.sandbox_token
         self.session_id = config.session_id
+        self.workspace_path = config.workspace_path
         self._process: asyncio.subprocess.Process | None = None
 
     async def start(self) -> None:
@@ -33,7 +35,10 @@ class AgentBridgeProcess:
             return
 
         self._process = await asyncio.create_subprocess_exec(
-            "python",
+            # The bridge is part of this artifact, so it belongs on the same
+            # interpreter the supervisor is running on. Resolving `python` off
+            # PATH would find whichever one the platform happens to ship.
+            sys.executable,
             "-m",
             "sandbox_runtime.bridge",
             "--sandbox-id",
@@ -46,6 +51,8 @@ class AgentBridgeProcess:
             self.sandbox_token,
             "--opencode-port",
             str(OPENCODE_PORT),
+            "--workspace",
+            str(self.workspace_path),
             env=os.environ,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,

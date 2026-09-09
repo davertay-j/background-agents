@@ -5,6 +5,11 @@ from typing import TYPE_CHECKING, Any
 import httpx
 import pytest
 
+from sandbox_runtime.constants import (
+    BIN_INSTALL_DIR_ENV_VAR,
+    SCM_CRED_CACHE_DIR_ENV_VAR,
+    WORKSPACE_ROOT_ENV_VAR,
+)
 from sandbox_runtime.opencode_client import OpenCodeClient
 
 if TYPE_CHECKING:
@@ -24,7 +29,21 @@ def isolate_runtime_file_paths(tmp_path, monkeypatch):
     tunnel-env file. Tests that care about a specific path still patch it
     themselves; this fixture is the backstop that keeps every other test off
     the real files.
+
+    HOME is pinned for the same reason. On a platform whose paths hang off the
+    home directory rather than off /, a test that composes the production
+    runtime resolves a real workspace and bin directory, and writing to them
+    would litter the developer's home.
+
+    The path override variables are cleared rather than pinned. A developer or
+    a launcher that exports them -- which is exactly how a sandbox is started
+    -- would otherwise point the runtime at a directory that tests patching
+    the default paths never redirect, so the test both fails and writes
+    outside its tmp_path.
     """
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    for name in (BIN_INSTALL_DIR_ENV_VAR, WORKSPACE_ROOT_ENV_VAR, SCM_CRED_CACHE_DIR_ENV_VAR):
+        monkeypatch.delenv(name, raising=False)
     manifest_path = str(tmp_path / "oi-repo-manifest.json")
     boot_warnings_path = str(tmp_path / "oi-boot-warnings.jsonl")
     tunnel_env_path = str(tmp_path / ".tunnels.env")

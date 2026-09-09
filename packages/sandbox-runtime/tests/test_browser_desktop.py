@@ -11,6 +11,7 @@ import pytest
 from sandbox_runtime.browser_desktop import BrowserDesktop
 from sandbox_runtime.constants import NOVNC_PORT, VNC_DISPLAY, VNC_PORT
 from sandbox_runtime.entrypoint import build_supervisor
+from sandbox_runtime.runtime_platform import LinuxPlatform
 from tests.runtime_helpers import make_browser_desktop, make_supervisor
 
 _ORIGINAL_ASYNCIO_SLEEP = asyncio.sleep
@@ -50,6 +51,7 @@ async def _yielding_shutdown_wait(supervisor, _delay: float) -> bool:
 
 class TestStartVnc:
     def test_configures_display_for_workload_processes(self):
+        """Only Linux has this desktop, so pin the platform rather than the host."""
         with patch.dict(
             os.environ,
             {
@@ -60,7 +62,7 @@ class TestStartVnc:
             },
             clear=True,
         ):
-            supervisor = build_supervisor(asyncio.Event())
+            supervisor = build_supervisor(asyncio.Event(), LinuxPlatform(os.environ))
             assert os.environ["DISPLAY"] == VNC_DISPLAY
             assert "VNC_PASSWORD" not in os.environ
             assert supervisor.browser_desktop._password == "secret"

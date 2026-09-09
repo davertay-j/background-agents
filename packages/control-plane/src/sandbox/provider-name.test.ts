@@ -34,7 +34,12 @@ describe("resolveSandboxBackendName", () => {
     expect(resolveSandboxBackendName("opencomputer")).toBe("opencomputer");
   });
 
+  it('returns "macos" for "macos"', () => {
+    expect(resolveSandboxBackendName("macos")).toBe("macos");
+  });
+
   it("is case-insensitive", () => {
+    expect(resolveSandboxBackendName("macOS")).toBe("macos");
     expect(resolveSandboxBackendName("MODAL")).toBe("modal");
     expect(resolveSandboxBackendName("Daytona")).toBe("daytona");
     expect(resolveSandboxBackendName("E2B")).toBe("e2b");
@@ -49,6 +54,7 @@ describe("resolveSandboxBackendName", () => {
     expect(resolveSandboxBackendName("  vercel  ")).toBe("vercel");
     expect(resolveSandboxBackendName("  opencomputer  ")).toBe("opencomputer");
     expect(resolveSandboxBackendName("  e2b  ")).toBe("e2b");
+    expect(resolveSandboxBackendName("  macos  ")).toBe("macos");
   });
 
   it("throws for unsupported provider", () => {

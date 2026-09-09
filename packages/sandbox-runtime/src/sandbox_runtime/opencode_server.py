@@ -26,6 +26,7 @@ if TYPE_CHECKING:
 
     from .repo_config import RepoEntry
     from .runtime_config import OpenCodeConfig
+    from .runtime_platform import PlatformPaths
 
 _LOG_FORWARD_STREAM_LIMIT_BYTES = 1024 * 1024
 AGENT_TOOLS_GATED_ON_ENV = {"slack-notify.js": "AGENT_SLACK_NOTIFY_ENABLED"}
@@ -51,7 +52,10 @@ class OpenCodeServer:
         shutdown_event: asyncio.Event,
         log: Any,
         record_boot_warning: Callable[..., None],
+        *,
+        paths: PlatformPaths | None = None,
     ) -> None:
+        self._paths = paths
         self.shutdown_event = shutdown_event
         self.log = log
         self.record_boot_warning = record_boot_warning
@@ -269,7 +273,11 @@ class OpenCodeServer:
         if not bin_dir.is_dir():
             return
 
-        install_dir = Path(os.environ.get(BIN_INSTALL_DIR_ENV_VAR, DEFAULT_BIN_INSTALL_DIR))
+        install_dir = (
+            self._paths.bin_install_dir
+            if self._paths is not None
+            else Path(os.environ.get(BIN_INSTALL_DIR_ENV_VAR, DEFAULT_BIN_INSTALL_DIR))
+        )
         install_dir.mkdir(parents=True, exist_ok=True)
         for script in bin_dir.iterdir():
             if not script.is_file() or script.suffix not in {"", ".js"}:

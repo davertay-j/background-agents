@@ -1,6 +1,7 @@
 import { createModalClient } from "./client";
 import { createDaytonaRestClient } from "./daytona-rest-client";
 import { createE2BRestClient } from "./e2b-rest-client";
+import { createMacosHostAgentClient } from "./macos-host-agent-client";
 import { createOpenComputerRestClient } from "./opencomputer-rest-client";
 import { resolveSandboxBackendName, type SandboxBackendName } from "./provider-name";
 import type { SandboxProvider } from "./provider";
@@ -11,6 +12,11 @@ import {
   DEFAULT_E2B_SANDBOX_TIMEOUT_SECONDS,
   type E2BSandboxProvider,
 } from "./providers/e2b-provider";
+import {
+  createMacosProvider,
+  DEFAULT_MACOS_SANDBOX_TIMEOUT_SECONDS,
+  type MacosSandboxProvider,
+} from "./providers/macos-provider";
 import { createModalProvider, type ModalSandboxProvider } from "./providers/modal-provider";
 import {
   createOpenComputerProvider,
@@ -149,8 +155,35 @@ function createE2BProviderFromEnv(env: Env): E2BSandboxProvider {
   });
 }
 
+function createMacosProviderFromEnv(env: Env): MacosSandboxProvider {
+  if (!env.MACOS_HOST_AGENT_URL || !env.MACOS_HOST_AGENT_API_KEY) {
+    throw new Error(
+      "MACOS_HOST_AGENT_URL and MACOS_HOST_AGENT_API_KEY are required when SANDBOX_PROVIDER=macos"
+    );
+  }
+
+  const client = createMacosHostAgentClient({
+    apiUrl: env.MACOS_HOST_AGENT_URL,
+    apiKey: env.MACOS_HOST_AGENT_API_KEY,
+  });
+
+  return createMacosProvider(client, {
+    scmProvider: resolveScmProviderFromEnv(env.SCM_PROVIDER),
+    // The host agent's key doubles as the HMAC secret, the way every other
+    // provider uses its API key.
+    sandboxAccessPasswordSecret: env.MACOS_HOST_AGENT_API_KEY,
+    sandboxTimeoutSeconds: parseNumericEnv(
+      "MACOS_SANDBOX_TIMEOUT_SECONDS",
+      env.MACOS_SANDBOX_TIMEOUT_SECONDS,
+      DEFAULT_MACOS_SANDBOX_TIMEOUT_SECONDS
+    ),
+    goldenImage: env.MACOS_GOLDEN_IMAGE,
+  });
+}
+
 export function createSandboxProviderFromEnv(env: Env, backend: "daytona"): DaytonaSandboxProvider;
 export function createSandboxProviderFromEnv(env: Env, backend: "e2b"): E2BSandboxProvider;
+export function createSandboxProviderFromEnv(env: Env, backend: "macos"): MacosSandboxProvider;
 export function createSandboxProviderFromEnv(env: Env, backend: "modal"): ModalSandboxProvider;
 export function createSandboxProviderFromEnv(env: Env, backend: "vercel"): VercelSandboxProvider;
 export function createSandboxProviderFromEnv(
@@ -179,6 +212,8 @@ export function createSandboxProviderFromEnv(
       });
     case "e2b":
       return createE2BProviderFromEnv(env);
+    case "macos":
+      return createMacosProviderFromEnv(env);
     case "modal":
       return createModalProviderFromEnv(env);
   }

@@ -160,6 +160,15 @@ module "control_plane_worker" {
       { name = "E2B_TEMPLATE_ID", value = module.e2b_infra[0].template_id },
       { name = "E2B_SANDBOX_TIMEOUT_SECONDS", value = tostring(var.e2b_sandbox_timeout_seconds) },
       { name = "E2B_AUTO_PAUSE", value = tostring(var.e2b_auto_pause) },
+    ] : [],
+    local.use_macos_backend ? [
+      { name = "MACOS_HOST_AGENT_URL", value = var.macos_host_agent_url },
+      { name = "MACOS_SANDBOX_TIMEOUT_SECONDS", value = tostring(var.macos_sandbox_timeout_seconds) },
+    ] : [],
+    # Omitted rather than empty while the host agent runs sessions as local
+    # processes: the provider only names an image when one is configured.
+    local.use_macos_backend && var.macos_golden_image != "" ? [
+      { name = "MACOS_GOLDEN_IMAGE", value = var.macos_golden_image },
     ] : []
   )
 
@@ -210,6 +219,9 @@ module "control_plane_worker" {
     ] : [],
     local.use_e2b_backend ? [
       { name = "E2B_API_KEY", value = var.e2b_api_key },
+    ] : [],
+    local.use_macos_backend ? [
+      { name = "MACOS_HOST_AGENT_API_KEY", value = var.macos_host_agent_api_key },
     ] : [],
     # Slack bot token enables the agent-initiated `slack-notify` endpoint.
     # Shares the variable with the slack-bot worker; bound here so the same
