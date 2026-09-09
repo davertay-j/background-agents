@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { MacosSandboxProvider } from "./macos-provider";
 import type { MacosHostAgentClient, MacosSandbox } from "../macos-host-agent-client";
 import { MacosHostAgentApiError, MacosHostAgentNotFoundError } from "../macos-host-agent-client";
-import type { CreateSandboxConfig, ResumeConfig, StopConfig } from "../provider";
+import type { CreateSandboxConfig, ResumeConfig, SandboxProvider, StopConfig } from "../provider";
 import { SandboxProviderError } from "../provider";
 
 function sandbox(overrides: Partial<MacosSandbox> = {}): MacosSandbox {
@@ -78,8 +78,10 @@ describe("MacosSandboxProvider", () => {
 
   it("declares no snapshot or restore methods at all", () => {
     // The lifecycle manager gates on method presence, not only the capability
-    // flags, so absent is the honest way to say unsupported.
-    const provider = createProvider();
+    // flags, so absent is the honest way to say unsupported. Widened to the
+    // interface deliberately: that is how the manager holds a provider, and on
+    // the concrete class these properties do not exist to be read at all.
+    const provider: SandboxProvider = createProvider();
 
     expect(provider.takeSnapshot).toBeUndefined();
     expect(provider.restoreFromSnapshot).toBeUndefined();
