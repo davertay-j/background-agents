@@ -44,6 +44,7 @@ it at build time.
 | `slack-bot`     | TypeScript / CF Workers + Hono     | Slack event handler, session creation                       |
 | `github-bot`    | TypeScript / CF Workers + Hono     | PR review and @mention webhook handler                      |
 | `linear-bot`    | TypeScript / CF Workers + Hono     | Linear agent webhook handler                                |
+| `macos-infra`   | Python 3.12 / FastAPI              | Mac host agent: sandbox lifecycle on an on-premise Mac      |
 | `modal-infra`   | Python 3.12 / Modal + FastAPI      | Sandbox lifecycle, WebSocket bridge to control plane        |
 
 ## Common Commands
@@ -69,6 +70,7 @@ npm test -w @open-inspect/linear-bot
 
 # Tests — Python (pytest)
 cd packages/modal-infra && pytest tests/ -v
+cd packages/macos-infra && uv run pytest tests/ -v
 
 # Python linting
 cd packages/modal-infra && ruff check --fix && ruff format

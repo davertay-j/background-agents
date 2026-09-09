@@ -569,6 +569,43 @@ variable "e2b_template_memory_mb" {
   default     = 4096
 }
 
+# The Mac host is on-premise, so nothing here provisions it — these only tell
+# the control plane how to reach a host agent that already exists.
+variable "macos_host_agent_url" {
+  description = "Mac host agent base URL. The host is not publicly addressable, so this is a Cloudflare Tunnel hostname."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.sandbox_provider != "macos" || length(var.macos_host_agent_url) > 0
+    error_message = "macos_host_agent_url must be set when sandbox_provider = 'macos'."
+  }
+}
+
+variable "macos_host_agent_api_key" {
+  description = "Mac host agent pre-shared key — authenticates every request and derives browser-editor and desktop passwords"
+  type        = string
+  sensitive   = true
+  default     = ""
+
+  validation {
+    condition     = var.sandbox_provider != "macos" || length(var.macos_host_agent_api_key) >= 32
+    error_message = "macos_host_agent_api_key must be at least 32 characters when sandbox_provider = 'macos'."
+  }
+}
+
+variable "macos_golden_image" {
+  description = "Tart image the host agent clones per session. Empty while the host agent runs sessions as local processes rather than VMs."
+  type        = string
+  default     = ""
+}
+
+variable "macos_sandbox_timeout_seconds" {
+  description = "Sandbox lifetime in seconds on the macOS backend"
+  type        = number
+  default     = 7200
+}
+
 variable "nextauth_secret" {
   description = "Browser authentication secret used by the control plane (legacy Terraform input name; generate with: openssl rand -base64 32)"
   type        = string
@@ -590,8 +627,8 @@ variable "sandbox_provider" {
   default     = "modal"
 
   validation {
-    condition     = contains(["modal", "daytona", "vercel", "opencomputer", "e2b"], var.sandbox_provider)
-    error_message = "sandbox_provider must be 'modal', 'daytona', 'vercel', 'opencomputer', or 'e2b'."
+    condition     = contains(["modal", "daytona", "vercel", "opencomputer", "e2b", "macos"], var.sandbox_provider)
+    error_message = "sandbox_provider must be 'modal', 'daytona', 'vercel', 'opencomputer', 'e2b', or 'macos'."
   }
 }
 

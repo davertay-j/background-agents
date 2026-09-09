@@ -115,6 +115,19 @@ e2b_template_id = ""           # e.g., "open-inspect-sandbox"
 # sandbox on inbound activity. Default true; set false to kill on timeout.
 # e2b_auto_pause = true
 
+# macOS on an on-premise Mac
+# Only required when sandbox_provider = "macos"
+# Nothing here provisions the Mac — the host agent (packages/macos-infra) is
+# installed on it out of band, and these only say how to reach it. The control
+# plane runs on Cloudflare Workers and cannot join a VPN, so the host is
+# published through a Cloudflare Tunnel rather than being addressed directly.
+macos_host_agent_url = ""      # e.g., "https://mac-mini-5.example.com"
+macos_host_agent_api_key = ""  # sensitive — 32+ chars; also derives editor/desktop passwords
+# The golden image the host agent clones per session. Leave empty while the
+# host agent runs sessions as local processes instead of VMs.
+# macos_golden_image = "openinspect/macos-xcode:26"
+# macos_sandbox_timeout_seconds = 7200
+
 # =============================================================================
 # GitHub App Credentials
 # =============================================================================
@@ -274,6 +287,7 @@ nextauth_secret = ""
 # - "vercel": Vercel Sandbox API with filesystem snapshot restore
 # - "opencomputer": OpenComputer declarative-template sandboxes with hibernate/resume
 # - "e2b": direct E2B REST API integration with pause/resume
+# - "macos": macOS sessions on an on-premise Mac, via its host agent, with suspend/resume
 sandbox_provider = "modal"
 
 # Platform for the web app deployment

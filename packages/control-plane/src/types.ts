@@ -91,6 +91,11 @@ export interface EnvConfig {
   E2B_SANDBOX_TIMEOUT_SECONDS?: string; // Sandbox TTL in seconds; Hobby plans must set 3300
   E2B_AUTO_PAUSE?: string; // "true" (default) pauses on TTL expiry (resumable, auto-resumes) instead of killing
 
+  MACOS_HOST_AGENT_URL?: string; // Mac host agent base URL (a Cloudflare Tunnel hostname in production)
+  MACOS_HOST_AGENT_API_KEY?: string; // Host agent pre-shared key (auth header + HMAC derivation)
+  MACOS_GOLDEN_IMAGE?: string; // Tart image the host agent clones per session
+  MACOS_SANDBOX_TIMEOUT_SECONDS?: string; // Sandbox lifetime in seconds
+
   // Sandbox lifecycle configuration
   SANDBOX_INACTIVITY_TIMEOUT_MS?: string; // Inactivity timeout in ms (default: 600000 = 10 min)
   EXECUTION_TIMEOUT_MS?: string; // Max processing time before auto-fail; sessions fall back to DEFAULT_SANDBOX_TIMEOUT_SECONDS, the scheduler's recovery sweep to its DEFAULT_EXECUTION_TIMEOUT_MS

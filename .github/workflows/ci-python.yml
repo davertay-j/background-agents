@@ -8,6 +8,7 @@ on:
       - "packages/control-plane/src/image-builds/timeouts.ts"
       - "packages/daytona-infra/**"
       - "packages/e2b-infra/**"
+      - "packages/macos-infra/**"
       - "packages/modal-infra/**"
       - "packages/sandbox-runtime/**"
       - "packages/sandbox-images/**"
@@ -26,6 +27,7 @@ on:
       - "packages/control-plane/src/image-builds/timeouts.ts"
       - "packages/daytona-infra/**"
       - "packages/e2b-infra/**"
+      - "packages/macos-infra/**"
       - "packages/modal-infra/**"
       - "packages/sandbox-runtime/**"
       - "packages/sandbox-images/**"
@@ -103,6 +105,44 @@ jobs:
 
       - name: Run Ruff formatter check
         run: ruff format --check packages/modal-infra/ packages/e2b-infra/ packages/daytona-infra/ packages/sandbox-images/
+
+  check-python-macos-infra:
+    name: Lint, TypeCheck & Test (Python - macos-infra)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: packages/macos-infra
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run Ruff linter
+        run: ruff check src/ tests/
+
+      - name: Run Ruff formatter check
+        run: ruff format --check src/ tests/
+
+      # Enforced rather than advisory: this package is strict-clean from its
+      # first commit, and the host agent runs where nothing else can watch it.
+      - name: Run MyPy
+        run: mypy src/
+
+      - name: Run tests
+        run: pytest tests/ -v
 
   typecheck-python:
     name: TypeCheck (Python)
